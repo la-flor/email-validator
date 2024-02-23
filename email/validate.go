@@ -4,6 +4,9 @@ import (
 	"errors"
 	"log"
 	"net"
+	"net/smtp"
+	"strconv"
+	"time"
 )
 
 // Since not all servers allow address verification for
@@ -20,10 +23,16 @@ func CheckIfInvalid(email string) (bool, string) {
 		return true, "Invalid email input"
 	}
 
-	validMX, _, _ := checkMXValidity(parsedEmail.Domain)
+	validMX, Host, _ := checkMXValidity(parsedEmail.Domain)
 	
 	if !validMX {
 		return true, "Invalid MX records"
+	}
+
+	invalidHost := checkHostIfInvalid(Host)
+
+	if (invalidHost) {
+		return true, "Invalid host"
 	}
 
 	return false, "Email has not been proved invalid"
@@ -41,4 +50,33 @@ func checkMXValidity(host string) (bool, string, uint16) {
 	Pref := mxrecords[0].Pref
 
 	return true, Host, Pref
+}
+
+func checkHostIfInvalid(Host string) bool {
+	client, err := dialTimeout(Host)
+
+	if err != nil {
+		return true
+	}
+
+	defer client.Close()
+
+	return false
+}
+
+func dialTimeout(Host string) (*smtp.Client, error) {
+	address := net.JoinHostPort(Host,strconv.Itoa(25))
+
+	timeout := time.Second * 5
+
+	conn, err := net.DialTimeout("tcp", address, timeout)
+
+	if err != nil {
+		println("dialTimeout failed", conn, err)
+		return nil, err
+	}
+
+	defer conn.Close()
+
+	return smtp.NewClient(conn, Host)
 }
